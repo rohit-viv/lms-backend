@@ -15,6 +15,7 @@ import { Role } from '../common/enums/role.enum';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
 import { CourseQueryDto } from './dto/course-query.dto';
+import { S3Service } from '../common/s3/s3.service';
 
 
 
@@ -25,6 +26,7 @@ export class CoursesService {
         private readonly courseModel: Model<CourseDocument>,
         @Inject(CACHE_MANAGER)
         private readonly cacheManager: Cache,
+private readonly s3Service: S3Service,
     ) { }
 
     async create(
@@ -351,28 +353,43 @@ export class CoursesService {
         };
     }
 
-    async updateThumbnail(
-        courseId: string,
-        filename: string,
-        user: any,
-    ) {
-        const course = await this.courseModel.findById(courseId);
+   async updateThumbnail(
+    courseId: string,
+    file: Express.Multer.File,
+    user: any,
+) {
+    const course = await this.courseModel.findById(courseId);
 
-        if (!course) {
-            throw new NotFoundException('Course not found');
-        }
-
-        if (
-            user.role === Role.INSTRUCTOR &&
-            course.instructor.toString() !== user.sub
-        ) {
-            throw new ForbiddenException(
-                'You can update thumbnail only for your own course',
-            );
-        }
-
-        course.thumbnail = filename;
-
-        return course.save();
+    if (!course) {
+        throw new NotFoundException('Course not found');
     }
+
+    if (
+        user.role === Role.INSTRUCTOR &&
+        course.instructor.toString() !== user.sub
+    ) {
+        throw new ForbiddenException(
+            'You can update thumbnail only for your own course',
+        );
+    }
+
+    const oldThumbnail = course.thumbnail;
+
+    const s3Key = await this.s3Service.uploadFile(
+        file,
+        'courses/thumbnails',
+    );
+
+    course.thumbnail = s3Key;
+    await course.save();
+
+    if (
+        oldThumbnail &&
+        oldThumbnail.startsWith('courses/thumbnails/')
+    ) {
+        await this.s3Service.deleteFile(oldThumbnail);
+    }
+
+    return course;
+}
 }

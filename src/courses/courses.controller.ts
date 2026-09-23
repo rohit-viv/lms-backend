@@ -15,8 +15,7 @@ import {
     UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { extname } from 'path';
+import { memoryStorage } from 'multer';
 import { CoursesService } from './courses.service';
 import { CreateCourseDto } from './dto/create-course.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
@@ -111,22 +110,10 @@ export class CoursesController {
     @UseGuards(AuthGuard, RolesGuard)
     @Roles(Role.ADMIN, Role.INSTRUCTOR)
     @UseInterceptors(
-        FileInterceptor('file', {
-            storage: diskStorage({
-                destination: './uploads/courses',
-
-                filename: (req, file, callback) => {
-                    const uniqueName =
-                        `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-
-                    callback(
-                        null,
-                        `${uniqueName}${extname(file.originalname)}`,
-                    );
-                },
-            }),
-        }),
-    )
+    FileInterceptor('file', {
+        storage: memoryStorage(),
+    }),
+)
     uploadThumbnail(
         @Param('id', ParseObjectIdPipe) id: string,
 
@@ -148,9 +135,9 @@ export class CoursesController {
         @CurrentUser() user: any,
     ) {
         return this.coursesService.updateThumbnail(
-            id,
-            file.filename,
-            user,
+           id,
+    file,
+    user,
         );
     }
 }
